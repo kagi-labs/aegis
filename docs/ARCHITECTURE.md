@@ -46,11 +46,24 @@ sequenceDiagram
 ### 3. Approval Server (`pkg/server`)
 - Runs a lightweight HTTP server (e.g., port `9090`).
 - Provides an API for the UI to poll/push notifications.
-- Provides a Web Interface (`http://localhost:9090/approve`) for the user to click buttons.
+- **Approval Channels:**
+    - **Local UI:** Web Interface (`http://localhost:9090`) for desktop users.
+    - **Telegram/Chat:** Send an interactive message ("Approve/Deny" buttons) via a bot. Useful for Headless/Cloud Agents.
+    - **API Hook:** Call an external webhook.
 
-### 4. Transports
-- **Upstream (Target):** Connects to the real server via Stdio (executing the binary).
-- **Downstream (Client):** Listens on Stdio (where the AI connects).
+## Deployment Modes
+
+### 1. Local Proxy (Desktop Security)
+Use with **Hashi** or direct Codex/Claude usage.
+- Runs on: User's Laptop.
+- Protects: Local Files, Local Shell.
+- Approval: Toast Notification / Local Web.
+
+### 2. Sidecar (Agent Security)
+Use with **OpenClaw/BMO**.
+- Runs on: The Agent's Host (Raspberry Pi/Cloud).
+- Protects: The Agent's tools (e.g., prevent BMO from deleting its own memory).
+- Approval: **Telegram Message** to the owner.
 
 ## Technology Stack
 - **Language:** Go (High performance, strong concurrency for handling IO pipes).
