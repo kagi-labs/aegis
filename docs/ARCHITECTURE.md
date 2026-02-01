@@ -46,10 +46,11 @@ sequenceDiagram
 ### 3. Approval Server (`pkg/server`)
 - Runs a lightweight HTTP server (e.g., port `9090`).
 - Provides an API for the UI to poll/push notifications.
-- **Approval Channels:**
-    - **Local UI:** Web Interface (`http://localhost:9090`) for desktop users.
-    - **Telegram/Chat:** Send an interactive message ("Approve/Deny" buttons) via a bot. Useful for Headless/Cloud Agents.
-    - **API Hook:** Call an external webhook.
+- **Interaction Adapters (Plugins):**
+    - **OpenClaw Bridge:** Detects if running inside OpenClaw; uses native `message` tool with Inline Buttons.
+    - **Desktop:** Native Toast notification ("Click to Review").
+    - **Direct Telegram:** Acts as a standalone bot if tokens are provided.
+    - **Fallback:** "Reply YES to approve" (for CLI/SMS).
 
 ## Deployment Modes
 
