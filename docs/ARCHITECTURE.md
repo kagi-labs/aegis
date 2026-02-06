@@ -5,6 +5,14 @@ The MCP Firewall operates as a **Man-in-the-Middle (MITM)** proxy between the **
 
 Instead of the Client connecting directly to a tool, it connects to the Firewall. The Firewall manages the connection to the actual tool, inspecting and controlling the traffic in real-time.
 
+### Interception Logic (The "Catch")
+To ensure no tool call escapes, the Firewall uses a **Blocking Stdio Proxy**. 
+1. The Agent Client sends a `tools/call` JSON-RPC message to the Firewall's stdin.
+2. The Firewall's **Inspector** parses the stream.
+3. If the message is a `tools/call`, the Firewall **buffers** the message and **pauses** the stream to the Real MCP Tool.
+4. The Firewall then triggers the **Approval Adapter**.
+5. Only after receiving an `ALLOW` signal does the Firewall forward the original message to the Real MCP Tool's stdin.
+
 ```mermaid
 sequenceDiagram
     participant Client as AI Agent (Client)
@@ -23,10 +31,11 @@ sequenceDiagram
     FW-->>Client: { tools: [...] }
 
     Note over Client, Server: Execution (Interception)
-    Client->>FW: tools/call
+    Client->>FW: tools/call (Buffered)
     FW->>Human: Check Policy / Request Approval
+    Note right of FW: Stream PAUSED
     Human-->>FW: ALLOW
-    FW->>Server: tools/call
+    FW->>Server: tools/call (Forwarded)
     Server-->>FW: Result
     FW-->>Client: Result
 ```
@@ -43,6 +52,9 @@ We are building this in two distinct phases. Phase 1 focuses on immediate securi
 
 In this phase, the Firewall is a **transparent wrapper**. It does not manage installation, dependencies, or configuration. It assumes the user has already installed the tool (e.g., via `npm` or `pip`).
 
+*   **Registration vs. Installation:**
+    *   **Installation:** Users install tools directly on the host (e.g., `npm i -g mcp-server-git`).
+    *   **Registration:** Users "register" the tool with the Firewall by wrapping the execution command.
 *   **Usage:**
     *   Old: `npx -y @modelcontextprotocol/server-filesystem /path`
     *   New: `mcp-firewall run -- npx -y @modelcontextprotocol/server-filesystem /path`
