@@ -1,77 +1,79 @@
-# MCP Firewall Architecture
+# MCP Firewall Architecture (v2)
+
+## Overview
+The MCP Firewall is a Man-in-the-Middle (MITM) proxy for the Model Context Protocol. It sits between an AI Client (like Hashi or Claude) and an MCP Server, providing a secure layer for policy enforcement, human approval, and visibility.
 
 ## Core Design
-The Firewall is a **Man-in-the-Middle (MITM)** proxy for the Model Context Protocol.
+The Firewall intercepts JSON-RPC traffic on Stdio or SSE.
 
 ```mermaid
 sequenceDiagram
     participant AI as AI Client (Claude/Hashi)
     participant FW as Firewall
-    participant UI as Approval UI (Browser/Toast)
+    participant Web as Web Dashboard
     participant Target as Real MCP Server
 
     AI->>FW: tools/list
     FW->>Target: tools/list
-    Target-->>FW: { tools: [delete_file, read_file] }
-    FW-->>AI: { tools: [delete_file, read_file] }
+    Target-->>FW: { tools: [...] }
+    FW-->>AI: { tools: [...] }
 
-    AI->>FW: tools/call { name: "delete_file", args: {path: "X"} }
-    FW->>UI: Request Approval: "delete_file(X)"
-    UI-->>User: Show Prompt
-    User-->>UI: Click "Approve"
-    UI-->>FW: Approved
-    FW->>Target: tools/call { name: "delete_file", args: {path: "X"} }
-    Target-->>FW: Result: "Deleted"
-    FW-->>AI: Result: "Deleted"
+    AI->>FW: tools/call { tool: "run_command" }
+    Note over FW: Matches Policy: "ask"
+    FW->>Web: New Request Alert
+    Web-->>User: Show Prompt (Approve/Deny)
+    User->>Web: Click "Approve"
+    Web->>FW: Approval Received
+    FW->>Target: tools/call { tool: "run_command" }
+    Target-->>FW: Result
+    FW-->>AI: Result
 ```
 
 ## Modules
 
 ### 1. Proxy Core (`pkg/proxy`)
-- Handles the JSON-RPC traffic.
-- Parses incoming messages.
-- Decides whether to **Pass Through** (e.g., `ping`, `list_tools`) or **Intercept** (`call_tool`).
+- Manages the IO streams (Stdio/SSE).
+- Handles JSON-RPC parsing and buffering.
+- **Interception Logic:** Buffers tool calls and pauses the stream until the Policy Engine or Human provides a verdict.
 
 ### 2. Policy Engine (`pkg/policy`)
-- Not all calls need approval.
-- Supports a `policy.yaml`:
-    ```yaml
-    rules:
-      - tool: "read_*"
-        action: allow
-      - tool: "delete_*"
-        action: ask
-    ```
+- Determines the action for every request: `allow`, `deny`, `ask`, or `log`.
+- **Log Mode:** For specific endpoints, the Firewall forwards the call immediately but sends a "notification-only" log to the configured channel (e.g., Telegram) without blocking.
+- **Granular Rules:** Rules can be applied at the server, tool, or even argument level.
 
-### 3. Approval Server (`pkg/server`)
-- Runs a lightweight HTTP server (e.g., port `9090`).
-- Provides an API for the UI to poll/push notifications.
-- **Interaction Adapters (Plugins):**
-    - **OpenClaw Bridge:** Detects if running inside OpenClaw; uses native `message` tool with Inline Buttons.
-    - **Desktop:** Native Toast notification ("Click to Review").
-    - **Direct Telegram:** Acts as a standalone bot if tokens are provided.
-    - **Fallback:** "Reply YES to approve" (for CLI/SMS).
+### 3. Web Dashboard & Management (`pkg/web`)
+- A local web interface (e.g., `:9090`) to manage the firewall state.
+- **Visibility:** List all registered MCP servers and their available tools (Discovery).
+- **Control:** Live approval queue for "ask" actions.
+- **Configuration:** Add/Remove MCP servers and edit tool policies through the UI.
+- **Documentation:** Automatic generation of documentation for registered MCPs based on their `tools/list` schema.
 
-## Deployment Modes
+### 4. Registry & CLI (`pkg/registry`)
+- **MCP Registration:** Add new servers via `mcp-firewall register -- <command>`.
+- **Rule Setup:** During registration, the user is prompted to set the initial policy (Default Allow, Default Ask, or per-endpoint rules).
+- **Persistence:** Configuration is stored in a local SQLite or YAML store.
 
-### 1. Local Proxy (Desktop Security)
-Use with **Hashi** or direct Codex/Claude usage.
-- Runs on: User's Laptop.
-- Protects: Local Files, Local Shell.
-- Approval: Toast Notification / Local Web.
+## Policy Configuration
+Policies can be managed via the Web UI or a `policy.yaml`:
+```yaml
+servers:
+  - id: "filesystem"
+    default_action: "ask"
+    tools:
+      - name: "read_file"
+        action: "allow"
+      - name: "write_file"
+        action: "ask"
+      - name: "list_directory"
+        action: "log" # Notifies the user but doesn't block
+```
 
-### 2. Sidecar (Agent Security)
-Use with **OpenClaw/BMO**.
-- Runs on: The Agent's Host (Raspberry Pi/Cloud).
-- Protects: The Agent's tools (e.g., prevent BMO from deleting its own memory).
-- Approval: **Telegram Message** to the owner.
+## Interaction Adapters
+- **Local Web:** For desktop usage.
+- **Telegram (Sora-Link):** For remote/headless usage via OpenClaw.
+- **Desktop Toasts:** Integration with OS notification systems.
 
-## Technology Stack
-- **Language:** Go (High performance, strong concurrency for handling IO pipes).
-- **Library:** `gliderlabs/ssh` or standard `jsonrpc`.
-
-## Roadmap
-1.  **v0.1:** Blind Proxy (Pass-through only).
-2.  **v0.2:** Interceptor (Log requests to file).
-3.  **v0.3:** Blocker (Wait for API approval).
-4.  **v0.4:** Web UI.
+## Roadmap (Updated)
+1.  **Phase 1 (Core):** Stdio Proxy + JSON-RPC Interceptor + CLI registration.
+2.  **Phase 2 (Web & Policy):** Web Dashboard + Granular Endpoint Policies + "Log-only" mode.
+3.  **Phase 3 (Discovery):** Auto-generated documentation and advanced auditing.
