@@ -1,17 +1,13 @@
 # Project Aegis Architecture 🛡️
 
 ## Overview
-Project Aegis is the Universal Security Control Plane. It acts as a MITM proxy for MCP tool calls, enforcing human-in-the-loop approvals and static analysis of skills.
+Project Aegis is the Universal Security Control Plane. It lives on the **Client Side** as a MITM proxy for tool calls, enforcing safety and human-in-the-loop approvals.
 
 ## Human Interface
-Aegis does not manage its own bot connections. When a tool call requires human approval:
-1. Aegis pauses the tool execution.
-2. Aegis sends an approval request to **Project Minato**.
-3. Minato routes that request to the user's preferred channel (Discord/Telegram/Web).
-4. The user's decision is routed back through Minato to Aegis.
+Aegis communicates with the local **Minato** instance to handle human approvals.
+1. Aegis pauses tool execution.
+2. Aegis sends an approval request to **Minato**.
+3. Minato routes the request to the user's active channel.
 
-## Scope
-- **Proxy Core:** Stdio/SSE interception.
-- **Policy Engine:** CEL-based rule evaluation.
-- **Skill Auditor:** Static analysis of \`SKILL.md\` files.
-- **Local Trust:** Caching verified versions of tools and skills.
+## Storage & Trust
+Aegis uses **Project Kura** to store its "Local Trust" records—verified versions of tools and skills are cached locally for speed and security.
