@@ -1,79 +1,63 @@
-# MCP Firewall Architecture (v2)
+# Project Aegis Architecture (v2) 🛡️
 
 ## Overview
-The MCP Firewall is a Man-in-the-Middle (MITM) proxy for the Model Context Protocol. It sits between an AI Client (like Hashi or Claude) and an MCP Server, providing a secure layer for policy enforcement, human approval, and visibility.
+**Project Aegis** (formerly MCP Firewall) is a Universal Security Control Plane for AI Agents. It sits between an AI Client (like Hashi or Claude) and MCP Servers, providing a secure layer for tool proxying, skill auditing, and dependency scanning.
 
 ## Core Design
-The Firewall intercepts JSON-RPC traffic on Stdio or SSE.
+Aegis acts as a Man-in-the-Middle (MITM) proxy for the Model Context Protocol, enforcing granular security policies.
 
 ```mermaid
 sequenceDiagram
     participant AI as AI Client (Claude/Hashi)
-    participant FW as Firewall
+    participant Aegis as Aegis Proxy
     participant Web as Web Dashboard
+    participant Channel as Bot Channel (Discord/Telegram)
     participant Target as Real MCP Server
 
-    AI->>FW: tools/list
-    FW->>Target: tools/list
-    Target-->>FW: { tools: [...] }
-    FW-->>AI: { tools: [...] }
+    AI->>Aegis: tools/call { tool: "run_command" }
+    Note over Aegis: Matches Policy: "ask"
+    
+    par Approval Notification
+        Aegis->>Web: Update Dashboard Queue
+        Aegis->>Channel: Send Approval Request
+    end
 
-    AI->>FW: tools/call { tool: "run_command" }
-    Note over FW: Matches Policy: "ask"
-    FW->>Web: New Request Alert
-    Web-->>User: Show Prompt (Approve/Deny)
-    User->>Web: Click "Approve"
-    Web->>FW: Approval Received
-    FW->>Target: tools/call { tool: "run_command" }
-    Target-->>FW: Result
-    FW-->>AI: Result
+    User->>Channel: Click "Approve"
+    Channel-->>Aegis: Approval Received
+    
+    Aegis->>Target: tools/call { tool: "run_command" }
+    Target-->>Aegis: Result
+    Aegis-->>AI: Result
 ```
 
 ## Modules
 
 ### 1. Proxy Core (`pkg/proxy`)
-- Manages the IO streams (Stdio/SSE).
-- Handles JSON-RPC parsing and buffering.
-- **Interception Logic:** Buffers tool calls and pauses the stream until the Policy Engine or Human provides a verdict.
+- Manages IO streams (Stdio/SSE/WebSocket).
+- Handles JSON-RPC 2.0 parsing and buffering.
+- **Interception Logic:** Buffers `tools/call` and pauses the stream until a verdict is reached.
 
 ### 2. Policy Engine (`pkg/policy`)
-- Determines the action for every request: `allow`, `deny`, `ask`, or `log`.
-- **Log Mode:** For specific endpoints, the Firewall forwards the call immediately but sends a "notification-only" log to the configured channel (e.g., Telegram) without blocking.
-- **Granular Rules:** Rules can be applied at the server, tool, or even argument level.
+- Determines the action: `allow`, `deny`, `ask`, or `log`.
+- **Granular Rules:** Matches by tool name patterns and CEL (Common Expression Language) conditions on arguments.
+- **Hot-Reloading:** Watches `aegis.yaml` for changes without downtime.
 
-### 3. Web Dashboard & Management (`pkg/web`)
-- A local web interface (e.g., `:9090`) to manage the firewall state.
-- **Visibility:** List all registered MCP servers and their available tools (Discovery).
-- **Control:** Live approval queue for "ask" actions.
-- **Configuration:** Add/Remove MCP servers and edit tool policies through the UI.
-- **Documentation:** Automatic generation of documentation for registered MCPs based on their `tools/list` schema.
+### 3. Human-in-the-Loop (HITL)
+- **Web Dashboard:** A local management UI for visibility and quick approvals.
+- **Messaging Adapters:** 
+    - **Discord/Telegram:** Integration with existing bot channels for remote approval.
+    - **OpenClaw Native:** Leverages OpenClaw's internal notification system for unified steering.
 
-### 4. Registry & CLI (`pkg/registry`)
-- **MCP Registration:** Add new servers via `mcp-firewall register -- <command>`.
-- **Rule Setup:** During registration, the user is prompted to set the initial policy (Default Allow, Default Ask, or per-endpoint rules).
-- **Persistence:** Configuration is stored in a local SQLite or YAML store.
+### 4. Skill Auditor (`pkg/audit/skill`)
+- Scans `SKILL.md` files for prompt injection or malicious instructions before they are loaded by the agent.
+- **On-Demand Scanning:** Audits skills as they are discovered or requested.
 
-## Policy Configuration
-Policies can be managed via the Web UI or a `policy.yaml`:
-```yaml
-servers:
-  - id: "filesystem"
-    default_action: "ask"
-    tools:
-      - name: "read_file"
-        action: "allow"
-      - name: "write_file"
-        action: "ask"
-      - name: "list_directory"
-        action: "log" # Notifies the user but doesn't block
-```
+### 5. Registry & Metadata (`pkg/registry`)
+- Stores "Local Trust" records—once a version of a tool or skill is verified, it is cached as safe.
+- Manages MCP server registration and discovery.
 
-## Interaction Adapters
-- **Local Web:** For desktop usage.
-- **Telegram (Sora-Link):** For remote/headless usage via OpenClaw.
-- **Desktop Toasts:** Integration with OS notification systems.
-
-## Roadmap (Updated)
-1.  **Phase 1 (Core):** Stdio Proxy + JSON-RPC Interceptor + CLI registration.
-2.  **Phase 2 (Web & Policy):** Web Dashboard + Granular Endpoint Policies + "Log-only" mode.
-3.  **Phase 3 (Discovery):** Auto-generated documentation and advanced auditing.
+## Roadmap
+1.  **Phase 1 (Shield):** Stdio Proxy + JSON-RPC Interceptor + CLI.
+2.  **Phase 2 (Dashboard & Channels):** Web UI + Discord/Telegram adapters for remote approval.
+3.  **Phase 3 (Aegis Auditor):** Static analysis of Skill files and prompt safety checks.
+4.  **Phase 4 (Nexus Integration):** Centralized storage of audit logs and trusted fingerprints in Project Kura.
