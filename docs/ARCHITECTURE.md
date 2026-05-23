@@ -46,7 +46,7 @@ sequenceDiagram
 - **Web Dashboard:** A local management UI for visibility and quick approvals.
 - **Messaging Adapters:** 
     - **Discord/Telegram:** Integration with existing bot channels for remote approval.
-    - **OpenClaw Native:** Leverages OpenClaw's internal notification system for unified steering.
+    - **Minato Native:** Uses Minato as the channel bridge for Discord/Telegram/web approval flows.
 
 ### 4. Skill Auditor (`pkg/audit/skill`)
 - Scans `SKILL.md` files for prompt injection or malicious instructions before they are loaded by the agent.
@@ -60,4 +60,4 @@ sequenceDiagram
 1.  **Phase 1 (Shield):** Stdio Proxy + JSON-RPC Interceptor + CLI.
 2.  **Phase 2 (Dashboard & Channels):** Web UI + Discord/Telegram adapters for remote approval.
 3.  **Phase 3 (Aegis Auditor):** Static analysis of Skill files and prompt safety checks.
-4.  **Phase 4 (Nexus Integration):** Centralized storage of audit logs and trusted fingerprints in Project Kura.
+4.  **Phase 4 (Kura Integration):** Centralized storage of audit logs and trusted fingerprints in Project Kura.
